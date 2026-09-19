@@ -1,0 +1,6 @@
+patient_id,age,blood_pressure,cholesterol,diagnosis,heart_rate
+1,45,120,190,none,72
+2,60,140,240,hypertension,88
+3,,135,210,none,76
+4,52,150,260,diabetes,90
+5,38,110,180,none,68
