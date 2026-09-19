@@ -25,7 +25,7 @@ from langgraph.graph import StateGraph, END
 from profiler import profile_csv, load_csv
 from domain_classifier import classify_domain
 from fix_proposer import propose_fixes, apply_approved_fixes
-
+from reporter import reporter_node
 
 class PipelineState(TypedDict):
     csv_path: str
@@ -123,13 +123,6 @@ def route_after_recheck(state: PipelineState) -> str:
 def visualizer_node(state: PipelineState) -> PipelineState:
     print("\n[Agent 2 - PLACEHOLDER] Generating charts...")
     state["chart_paths"] = ["placeholder_chart.png"]
-    return state
-
-
-def reporter_node(state: PipelineState) -> PipelineState:
-    print("\n[Agent 3 - PLACEHOLDER] Generating report...")
-    state["insights"] = "Placeholder insights text."
-    state["pdf_path"] = "placeholder_report.pdf"
     return state
 
 
