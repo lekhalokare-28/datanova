@@ -12,6 +12,8 @@ from pptx.enum.text import PP_ALIGN
 from llm_client import call_llm
 
 
+
+
 def sanitize_llm_text(text: str) -> str:
     replacements = {
         '\u2011': '-', '\u2010': '-', '\u2013': '-', '\u2014': '-', '\u2212': '-',
@@ -29,9 +31,51 @@ def convert_markdown_bold(text: str) -> str:
 def clean_markdown_for_ppt(text: str) -> str:
     """Strips Markdown bolding and excessive symbols for PowerPoint slides."""
     text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
-    text = re.sub(r'^\s*[-*•]\s*', '', text) 
+    text = re.sub(r'^\s*[-*•]\s*', '', text)
     return text.strip()
 
+
+def build_pptx_report(narrative, domain_name, report_style, chart_paths):
+    prs = Presentation()
+
+    # Slide 1: Title
+    title_slide = prs.slides.add_slide(prs.slide_layouts[0])
+    title_slide.shapes.title.text = "DataNova: Automated EDA Report"
+    title_slide.placeholders[1].text = f"Domain Detected: {domain_name.capitalize()}"
+
+    # One slide per narrative section
+    for section in narrative.split("\n\n"):
+        clean = section.strip()
+        if not clean:
+            continue
+
+        slide = prs.slides.add_slide(prs.slide_layouts[1])
+        lines = clean.split(" - ")
+
+        slide.shapes.title.text = lines[0][:60]
+
+        body = slide.placeholders[1].text_frame
+
+        for line in lines[1:]:
+            p = body.add_paragraph()
+            p.text = line.strip()
+            p.level = 0
+
+    # Chart slides
+    for chart_path in chart_paths:
+        if os.path.exists(chart_path):
+            slide = prs.slides.add_slide(prs.slide_layouts[5])
+            slide.shapes.add_picture(
+                chart_path,
+                Inches(1),
+                Inches(1),
+                width=Inches(8)
+            )
+
+    pptx_path = "reports/eda_presentation_report.pptx"
+    prs.save(pptx_path)
+
+    return pptx_path
 
 def build_prompt(domain, profile_report, report_style):
     style_guidelines = {
@@ -279,4 +323,13 @@ def reporter_node(state):
 
     doc.build(story)
     state["pdf_path"] = pdf_path
+    return state
+    if report_style == "presentation":
+        output_path = build_pptx_report(narrative, domain_name, report_style, chart_paths)
+    else:
+        doc.build(story)
+        output_path = pdf_path
+
+    state["insights"] = narrative
+    state["pdf_path"] = output_path
     return state

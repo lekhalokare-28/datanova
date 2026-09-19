@@ -1,0 +1,87 @@
+"""
+chat_followup.py
+
+Agent 4: Conversational Follow-Up.
+
+Unlike Agents 1-3, this is NOT a node in the main LangGraph pipeline -
+it's called on-demand, AFTER the pipeline finishes, whenever the user
+types a question. It reuses the SAME shared LLM client as every other
+agent, and reads from the already-cleaned data + profiling results
+rather than re-running any analysis.
+"""
+
+import pandas as pd
+from llm_client import call_llm
+
+
+def answer_followup_question(question: str, csv_path: str, profile_report: dict,
+                               domain: dict, chat_history: list = None) -> str:
+    """Answers a natural-language question about the dataset.
+
+    Args:
+        question: the user's typed question
+        csv_path: path to the CLEANED csv (post Agent 1)
+        profile_report: the data quality findings from Agent 1
+        domain: the classified domain info from Agent 1
+        chat_history: list of {"question": ..., "answer": ...} from earlier
+                       turns in this session, so follow-ups can reference
+                       previous answers (optional, defaults to none)
+
+    Returns:
+        The answer as plain text.
+    """
+    df = pd.read_csv(csv_path)
+
+    # Give the model real, concrete grounding: actual column stats and a
+    # small sample of real rows - NOT the whole dataset (could be huge).
+    numeric_summary = df.describe(include="all").to_dict()
+    sample_rows = df.head(5).to_dict(orient="records")
+
+    history_text = ""
+    if chat_history:
+        history_text = "Previous conversation in this session:\n"
+        for turn in chat_history[-3:]:  # only last 3 turns to keep prompt small
+            history_text += f"Q: {turn['question']}\nA: {turn['answer']}\n"
+
+    prompt = f"""You are a data analysis assistant answering a user's question about
+their dataset. Answer clearly and concisely, using only the information given below.
+If the question cannot be answered from this data, say so honestly rather than guessing.
+
+Dataset domain: {domain.get('domain', 'unknown')}
+
+Data quality summary (from earlier profiling):
+{profile_report}
+
+Column statistics:
+{numeric_summary}
+
+Sample rows:
+{sample_rows}
+
+{history_text}
+User's question: {question}
+
+Answer:"""
+
+    return call_llm(prompt)
+
+
+if __name__ == "__main__":
+    # Quick standalone test
+    import json
+
+    test_df = pd.DataFrame({
+        "age": [25, 34, 29, 41, 38, 30, 27, 33],
+        "income": [45000, 55500, 52000, 58000, 49000, 53000, 55500, 60000],
+        "region": ["North", "South", "East", "North", "South", "West", "North", "South"]
+    })
+    test_df.to_csv("chat_test_data.csv", index=False)
+
+    fake_profile_report = {
+        "missing_values": {},
+        "outliers": {},
+        "schema": {"num_rows": 8, "num_columns": 3}
+    }
+    fake_domain = {"domain": "sales", "confidence": 0.9}
+
+    print("Testing chat follow-up (mocked LLM response)...")

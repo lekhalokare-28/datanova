@@ -156,6 +156,7 @@ def build_pipeline():
 
 if __name__ == "__main__":
     csv_path = sys.argv[1] if len(sys.argv) > 1 else "data/sample.csv"
+    report_style = sys.argv[2] if len(sys.argv) > 2 else "executive"
 
     pipeline = build_pipeline()
 
@@ -170,7 +171,7 @@ if __name__ == "__main__":
         "is_clean": False,
         "recheck_count": 0,
         "chart_paths": [],
-        "report_style": "executive",
+        "report_style": report_style,
         "insights": "",
         "pdf_path": "",
         "chat_history": []

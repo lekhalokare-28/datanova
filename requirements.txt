@@ -4,3 +4,4 @@ openai
 python-dotenv
 langgraph
 reportlab
+python-pptx
