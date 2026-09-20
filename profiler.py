@@ -95,12 +95,17 @@ def detect_outliers_iqr(df: pd.DataFrame) -> dict:
         outlier_rows = df[(df[col] < lower_bound) | (df[col] > upper_bound)]
 
         if not outlier_rows.empty:
+            all_values = outlier_rows[col].tolist()
             outliers[col] = {
                 "outlier_count": len(outlier_rows),
                 "lower_bound": round(lower_bound, 2),
                 "upper_bound": round(upper_bound, 2),
-                "outlier_values": outlier_rows[col].tolist(),
-                "outlier_row_indices": outlier_rows.index.tolist()
+                # Cap to a small sample - a large dataset can have thousands
+                # of outliers, and dumping every single value into an LLM
+                # prompt bloats tokens and risks the model misinterpreting
+                # each value as a separate issue needing its own fix.
+                "outlier_values_sample": all_values[:5],
+                "outlier_row_indices_sample": outlier_rows.index.tolist()[:5]
             }
 
     return outliers
