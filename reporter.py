@@ -482,7 +482,10 @@ def reporter_node(state):
     return state
 
 
-# Code for testing:
-# python pipeline.py data/survey_lung_cancer.csv executive
-# python pipeline.py data/survey_lung_cancer.csv technical
-# python pipeline.py data/survey_lung_cancer.csv presentation
+
+
+#code for testing
+#source .venv/bin/activate
+#python pipeline.py data/survey_lung_cancer.csv executive
+#python pipeline.py data/survey_lung_cancer.csv technical
+#python pipeline.py data/survey_lung_cancer.csv presentation
