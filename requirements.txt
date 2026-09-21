@@ -5,3 +5,4 @@ python-dotenv
 langgraph
 reportlab
 python-pptx
+plotly
