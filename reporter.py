@@ -361,3 +361,9 @@ def reporter_node(state):
     doc.build(story)
     state["pdf_path"] = pdf_path
     return state
+
+#code for testing
+#source .venv/bin/activate
+#python pipeline.py data/survey_lung_cancer.csv executive
+#python pipeline.py data/survey_lung_cancer.csv technical
+#python pipeline.py data/survey_lung_cancer.csv presentation

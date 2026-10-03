@@ -6,3 +6,8 @@ langgraph
 reportlab
 python-pptx
 plotly
+scikit-learn
+xgboost
+shap
+matplotlib
+joblib
