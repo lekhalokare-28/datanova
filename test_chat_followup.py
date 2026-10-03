@@ -62,3 +62,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+#python test_chat_followup.py data/sample_cleaned.csv
