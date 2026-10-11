@@ -29,9 +29,14 @@ from langgraph.graph import StateGraph, END
 from profiler import profile_csv, load_csv
 from domain_classifier import classify_domain
 from fix_proposer import propose_fixes, apply_approved_fixes
-from reporter import reporter_node
+from reporter import (
+    reporter_node,
+    preprocess_and_split,
+    smart_profiler
+)
+from pso_feature_selection import run_feature_selection
 
-class PipelineState(TypedDict):
+class PipelineState(TypedDict, total=False):    
     csv_path: str
     original_csv_path: str  
 
@@ -53,6 +58,23 @@ class PipelineState(TypedDict):
 
     chat_history: list
 
+    # Member 1 - train/test data
+    target_col: str
+    leakage_cols: list
+    imbalance_ratio: str
+    X_train: object
+    X_test: object
+    y_train: object
+    y_test: object
+    feature_cols: list
+
+    # Member 2 - PSO feature selection
+    selected_features: list
+    best_fitness: float
+    pso_history: list
+    pso_runtime: float
+    baseline_feature_sets: dict
+
 
 def profile_node(state: PipelineState) -> PipelineState:
     print("\n[Agent 1a] Profiling CSV...")
@@ -64,10 +86,16 @@ def profile_node(state: PipelineState) -> PipelineState:
     domain_result = classify_domain(report["schema"], sample_rows)
     fixes_result = propose_fixes(report)
 
+    smart_profile = smart_profiler(df)
+
     state["schema"] = report["schema"]
     state["profile_report"] = report
     state["domain"] = domain_result
     state["proposed_fixes"] = fixes_result.get("fixes", [])
+
+    state["target_col"] = smart_profile["proposed_target"]
+    state["leakage_cols"] = smart_profile["leakage_cols"]
+    state["imbalance_ratio"] = smart_profile["imbalance_ratio"]
 
     print(f"  -> Domain: {domain_result['domain']} (confidence: {domain_result.get('confidence')})")
     print(f"  -> {len(state['proposed_fixes'])} fix(es) proposed")
@@ -107,6 +135,58 @@ def apply_fixes_node(state: PipelineState) -> PipelineState:
 
     print(f"  -> Re-check result: {'CLEAN' if state['is_clean'] else 'ISSUES REMAIN'} "
           f"(attempt {state['recheck_count']})")
+
+    return state
+
+def preprocessing_node(state: PipelineState) -> PipelineState:
+    """
+    Member 1 - preprocessing and train/test split.
+
+    Creates:
+        X_train
+        X_test
+        y_train
+        y_test
+        feature_cols
+    """
+
+    print("\n[Agent 1c] Preprocessing and train/test split...")
+
+    df = pd.read_csv(state["csv_path"])
+
+    # For now, use the target identified by the profiler.
+    target_col = state.get("target_col")
+
+    if not target_col:
+        raise ValueError(
+            "Target column has not been identified."
+        )
+
+    X_train, X_test, y_train, y_test, feature_cols = preprocess_and_split(
+        df=df,
+        target_col=target_col,
+        test_size=0.2,
+        random_state=42
+    )
+
+    state["X_train"] = X_train
+    state["X_test"] = X_test
+    state["y_train"] = y_train
+    state["y_test"] = y_test
+    state["feature_cols"] = feature_cols
+
+    print(
+        f"  -> Training rows: {len(X_train)}"
+    )
+
+    print(
+        f"  -> Testing rows: {len(X_test)}"
+    )
+
+    print(
+        f"  -> Features after preprocessing: "
+        f"{len(feature_cols)}"
+    )
 
     return state
 
@@ -474,12 +554,59 @@ def visualizer_node(state: PipelineState) -> PipelineState:
     return state
 
 
+def pso_feature_selection_node(state: PipelineState) -> PipelineState:
+    """
+    Member 2 - PSO Feature Selection.
+    Uses training data only.
+    """
+
+    print("\n[Member 2 - PSO] Feature Selection...")
+
+    result = run_feature_selection(
+        X_train=state["X_train"],
+        y_train=state["y_train"],
+        feature_cols=state["feature_cols"],
+        n_particles=20,
+        iters=30,
+        lambda_=0.05,
+        cv=3,
+        seed=42,
+        max_rows=20000,
+        run_ga=True
+    )
+
+    state["selected_features"] = result["selected_features"]
+    state["best_fitness"] = result["best_fitness"]
+    state["pso_history"] = result["pso_history"]
+    state["pso_runtime"] = result["pso_runtime"]
+    state["baseline_feature_sets"] = result["baseline_feature_sets"]
+
+    print(
+        f"  -> PSO selected "
+        f"{len(state['selected_features'])} features"
+    )
+
+    print(
+        f"  -> Best fitness: "
+        f"{state['best_fitness']:.6f}"
+    )
+
+    print(
+        f"  -> Runtime: "
+        f"{state['pso_runtime']:.2f} seconds"
+    )
+
+    return state
+
+
 def build_pipeline():
     graph = StateGraph(PipelineState)
 
     graph.add_node("profile", profile_node)
     graph.add_node("human_approval", human_approval_node)
     graph.add_node("apply_fixes", apply_fixes_node)
+    graph.add_node("preprocess", preprocessing_node)
+    graph.add_node("pso", pso_feature_selection_node)
     graph.add_node("visualize", visualizer_node)
     graph.add_node("report", reporter_node)
 
@@ -492,10 +619,12 @@ def build_pipeline():
         route_after_recheck,
         {
             "retry": "profile",
-            "proceed": "visualize"
+            "proceed": "preprocess"
         }
     )
 
+    graph.add_edge("preprocess", "pso")
+    graph.add_edge("pso", "visualize")
     graph.add_edge("visualize", "report")
     graph.add_edge("report", END)
 
